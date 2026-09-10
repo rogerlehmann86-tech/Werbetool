@@ -10,6 +10,8 @@
 <title>Lehmann Werbetool – v0.7 E-Mail + WhatsApp</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
 :root{--red:#c9151e;--black:#161616;--bg:#f4f5f7;--card:#fff;--line:#ddd;--muted:#666;--ok:#16833f;--warn:#a76b00}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--black)}
@@ -58,7 +60,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;borde
 
 <section class="card span4"><h2>4. Priorität</h2><div class="priority"><div class="prioitem"><span>1.</span><select class="prioritySelect"><option>whatsapp</option><option>email</option><option>sms</option><option>letter</option></select></div><div class="prioitem"><span>2.</span><select class="prioritySelect"><option>email</option><option>whatsapp</option><option>sms</option><option>letter</option></select></div><div class="prioitem"><span>3.</span><select class="prioritySelect"><option>sms</option><option>email</option><option>whatsapp</option><option>letter</option></select></div><div class="prioitem"><span>4.</span><select class="prioritySelect"><option>letter</option><option>sms</option><option>email</option><option>whatsapp</option></select></div></div></section>
 
-<section class="card span8 emailcontent"><div class="row" style="justify-content:space-between"><div><h2>5. Kampagnen-Inhalte</h2><div class="muted">Die Texte werden mit der Kampagne gespeichert. E-Mail wird über Resend versendet; WhatsApp über die Meta Cloud API mit freigegebenem Template. E-Mail-Platzhalter: {{vorname}}, {{nachname}}, {{firma}}.</div></div></div><div class="contentgrid" style="margin-top:12px"><div class="contentbox"><h3>WhatsApp</h3><div class="muted" style="margin-bottom:8px">Für neue WhatsApp-Kontakte wird ein von Meta freigegebenes Template verwendet. Der Text unten dient als interne Vorschau/Notiz.</div><label>Meta Template-Name</label><input id="whatsappTemplateName" type="text" placeholder="z. B. fruehlingsaktion_2026"><div class="row" style="margin-top:8px"><div class="field"><label>Sprache</label><input id="whatsappTemplateLanguage" type="text" value="de" placeholder="de"></div><div class="field"><label>Template-Parameter (Reihenfolge)</label><input id="whatsappTemplateParams" type="text" placeholder="vorname,firma"></div></div><textarea id="whatsappText" placeholder="Interne WhatsApp-Vorschau / Notiz …" style="margin-top:8px"></textarea><div class="charcount" id="whatsappCount">0 Zeichen</div></div><div class="contentbox"><h3>E-Mail</h3><input id="emailSubject" type="text" placeholder="Betreff"><textarea id="emailText" placeholder="E-Mail-Text …" style="margin-top:8px"></textarea><div class="charcount" id="emailCount">0 Zeichen</div></div><div class="contentbox"><h3>SMS</h3><textarea id="smsText" placeholder="SMS-Text …"></textarea><div class="charcount" id="smsCount">0 Zeichen</div></div><div class="contentbox"><h3>Brief</h3><textarea id="letterText" placeholder="Brieftext …"></textarea><div class="charcount" id="letterCount">0 Zeichen</div></div></div></section>
+<section class="card span8 emailcontent"><div class="row" style="justify-content:space-between"><div><h2>5. Kampagnen-Inhalte</h2><div class="muted">Die Texte werden mit der Kampagne gespeichert. E-Mail wird über Resend versendet; WhatsApp über die Meta Cloud API mit freigegebenem Template. E-Mail-Platzhalter: {{vorname}}, {{nachname}}, {{firma}}.</div></div></div><div class="contentgrid" style="margin-top:12px"><div class="contentbox"><h3>WhatsApp</h3><div class="muted" style="margin-bottom:8px">Für neue WhatsApp-Kontakte wird ein von Meta freigegebenes Template verwendet. Der Text unten dient als interne Vorschau/Notiz.</div><label>Meta Template-Name</label><input id="whatsappTemplateName" type="text" placeholder="z. B. fruehlingsaktion_2026"><div class="row" style="margin-top:8px"><div class="field"><label>Sprache</label><input id="whatsappTemplateLanguage" type="text" value="de" placeholder="de"></div><div class="field"><label>Template-Parameter (Reihenfolge)</label><input id="whatsappTemplateParams" type="text" placeholder="vorname,firma"></div></div><textarea id="whatsappText" placeholder="Interne WhatsApp-Vorschau / Notiz …" style="margin-top:8px"></textarea><div class="charcount" id="whatsappCount">0 Zeichen</div></div><div class="contentbox"><h3>E-Mail</h3><input id="emailSubject" type="text" placeholder="Betreff"><textarea id="emailText" placeholder="E-Mail-Text …" style="margin-top:8px"></textarea><div class="charcount" id="emailCount">0 Zeichen</div></div><div class="contentbox"><h3>SMS</h3><textarea id="smsText" placeholder="SMS-Text …"></textarea><div class="charcount" id="smsCount">0 Zeichen</div></div><div class="contentbox"><h3>Brief · A4 mit Fenster rechts</h3><div class="muted" style="margin-bottom:8px">Der Kampagnenname wird als Betreff verwendet. Platzhalter: {{vorname}}, {{nachname}}, {{firma}}. Briefkopf, Datum und Grusszeile werden automatisch ergänzt.</div><textarea id="letterText" placeholder="Brieftext …"></textarea><div class="charcount" id="letterCount">0 Zeichen</div></div></div></section>
 <section class="card emailstatuscard">
 <div class="emailstatushead"><div><h2>E-Mail-Versand & Status</h2><div class="muted">Separater Versandbereich der geöffneten Kampagne. <span id="autoRefreshInfo">Automatische Aktualisierung inaktiv.</span></div></div><div class="emailstatusactions"><button class="secondary" id="refreshDeliveryBtn" disabled>Status aktualisieren</button><button class="primary" id="sendEmailBtn" disabled>Senden</button></div></div>
 <div class="emailstatusgrid">
@@ -90,7 +92,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;borde
 
 <section class="card span12 deliverydetailcard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2>WhatsApp-Empfänger & Zustellstatus</h2><div class="muted">Historie der gespeicherten Kampagne: Mobilnummer, Meta-Status, Zeitpunkt und allfällige Fehler.</div></div></div><div class="detailwrap" style="margin-top:12px"><table><thead><tr><th>Kunde</th><th>Mobil</th><th>Status</th><th>Zeitpunkt</th><th>Hinweis / Fehler</th></tr></thead><tbody id="waDeliveryDetails"><tr><td colspan="5" class="muted">Noch keine Kampagne geöffnet.</td></tr></tbody></table></div></section>
 
-<section class="card span8"><div class="row" style="justify-content:space-between"><div><h2>Kundenübersicht</h2><div class="muted">Die ersten 500 Treffer werden angezeigt. Einzelne Kunden können vor dem Speichern ausgeschlossen werden.</div></div><div class="row"><button class="secondary" id="exportBriefBtn" disabled>Brief-Fallback als CSV</button><button class="secondary" id="exportSegmentBtn" disabled>Segment als CSV</button></div></div><div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Aus</th><th>ID</th><th>Kunde</th><th>Ort</th><th>Kategorien</th><th>Kontakt</th><th>Werbung</th><th>Zuweisung</th></tr></thead><tbody id="tbody"><tr><td colspan="8" class="muted">Noch keine Daten.</td></tr></tbody></table></div></section>
+<section class="card span8"><div class="row" style="justify-content:space-between"><div><h2>Kundenübersicht</h2><div class="muted">Die ersten 500 Treffer werden angezeigt. Einzelne Kunden können vor dem Speichern ausgeschlossen werden.</div></div><div class="row"><button class="secondary" id="exportBriefBtn" disabled>Briefe als Gesamt-PDF</button><button class="secondary" id="exportBriefZipBtn" disabled>Einzelbriefe als ZIP</button><button class="secondary" id="exportSegmentBtn" disabled>Segment als CSV</button></div></div><div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Aus</th><th>ID</th><th>Kunde</th><th>Ort</th><th>Kategorien</th><th>Kontakt</th><th>Werbung</th><th>Zuweisung</th></tr></thead><tbody id="tbody"><tr><td colspan="8" class="muted">Noch keine Daten.</td></tr></tbody></table></div></section>
 
 <section class="card span4"><h2>Gespeicherte Kampagnen</h2><div id="campaignHistory" class="history"><span class="muted">Noch keine Daten.</span></div></section>
 </div></main>
@@ -134,7 +136,7 @@ function can(c,ch){if(channelBlocked(c,ch))return false;if(ch==='whatsapp'||ch==
 function priorities(){const arr=[...document.querySelectorAll('.prioritySelect')].map(x=>x.value);return arr.filter((x,i)=>arr.indexOf(x)===i)}
 function calculate(){const seg=getSegment(),pr=priorities();lastAssignments=seg.map(c=>{let assigned='none',skipReason='';if(manualExcluded.has(c.id)){assigned='skipped';skipReason='manuell ausgeschlossen'}else if(c.block_all||c.marketing_status==='blocked'){assigned='skipped';skipReason='Werbesperre'}else{for(const ch of pr){if(channelEnabled(ch)&&can(c,ch)){assigned=ch;break}}}return{...c,assigned,skipReason}});applyAssignmentCounts(lastAssignments);$('saveMsg').textContent='';render(lastAssignments)}
 function resetCalculation(){lastAssignments=[];$('saveCampaignBtn').disabled=true;render()}
-function applyAssignmentCounts(rows){const counts={whatsapp:0,email:0,sms:0,letter:0,none:0,skipped:0};(rows||[]).forEach(x=>{const k=counts[x.assigned]!==undefined?x.assigned:'none';counts[k]++});for(const k of Object.keys(counts))$('p'+(k==='sms'?'Sms':k[0].toUpperCase()+k.slice(1))).textContent=counts[k].toLocaleString('de-CH');$('exportBriefBtn').disabled=!counts.letter;$('exportSegmentBtn').disabled=!(rows||[]).length;$('saveCampaignBtn').disabled=!currentUser||!(rows||[]).length}
+function applyAssignmentCounts(rows){const counts={whatsapp:0,email:0,sms:0,letter:0,none:0,skipped:0};(rows||[]).forEach(x=>{const k=counts[x.assigned]!==undefined?x.assigned:'none';counts[k]++});for(const k of Object.keys(counts))$('p'+(k==='sms'?'Sms':k[0].toUpperCase()+k.slice(1))).textContent=counts[k].toLocaleString('de-CH');$('exportBriefBtn').disabled=!counts.letter;$('exportBriefZipBtn').disabled=!counts.letter;$('exportSegmentBtn').disabled=!(rows||[]).length;$('saveCampaignBtn').disabled=!currentUser||!(rows||[]).length}
 function loadStoredAssignments(recipientRows){manualExcluded.clear();const customerMap=new Map(customers.map(c=>[String(c.id),c]));lastAssignments=(recipientRows||[]).map(r=>{const base=customerMap.get(String(r.contact_id))||{id:String(r.contact_id),company:'',firstname:'',lastname:'',street:'',zip:'',city:'',categories:[],has_mobile:false,has_email:false,has_post:false,marketing_status:'unknown'};let assigned=r.assigned_channel||'none';if(r.state==='skipped'&&!r.assigned_channel)assigned='skipped';if(r.state==='skipped'&&r.failure_reason==='manuell ausgeschlossen')manualExcluded.add(String(r.contact_id));return{...base,assigned,skipReason:r.failure_reason||'',recipientState:r.state||'planned'}});applyAssignmentCounts(lastAssignments);render(lastAssignments)}
 function marketingBadge(c){if(c.block_all||c.marketing_status==='blocked')return'<span class="pill red">gesperrt</span>';if(c.marketing_status==='consent')return'<span class="pill ok">Einwilligung</span>';if(c.marketing_status==='existing_customer')return'<span class="pill blue">Bestandskunde</span>';return'<span class="pill warn">unbekannt</span>'}
 function emailChannelBadge(c){const s=c.channel_status?.email;if(!c.has_email)return'';if(s?.opted_out_at||s?.state==='blocked')return'<span class="pill red">E-Mail abgemeldet</span>';if(s?.state==='invalid')return'<span class="pill red">E-Mail ungültig</span>';if(s?.state==='unavailable')return'<span class="pill warn">E-Mail nicht verfügbar</span>';return'<span class="pill ok">E-Mail</span>'}
@@ -241,13 +243,90 @@ async function sendEmailCampaign(){
   }catch(err){$('deliveryInfo').textContent='Versandfehler: '+(err?.message||String(err));setStatusBox('deliveryInfoBox','error');}
   finally{updateDeliveryPanel()}
 }
+
+let letterLogoDataPromise=null;
+function safeFilename(value){return(clean(value)||'brief').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,80)||'brief'}
+function personalizeLetter(text,c){return clean(text).replaceAll('{{vorname}}',clean(c.firstname)).replaceAll('{{nachname}}',clean(c.lastname)).replaceAll('{{firma}}',clean(c.company))}
+function letterRecipients(){return lastAssignments.filter(x=>x.assigned==='letter'&&postComplete(x))}
+async function getLetterLogoData(){
+ if(letterLogoDataPromise)return letterLogoDataPromise;
+ letterLogoDataPromise=fetch('./assets/icon-512.png').then(r=>{if(!r.ok)throw new Error('Logo konnte nicht geladen werden.');return r.blob()}).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Logo konnte nicht gelesen werden.'));reader.readAsDataURL(blob)}));
+ return letterLogoDataPromise;
+}
+function drawLetterBase(doc,logoData){
+ doc.setDrawColor(201,21,30);doc.setLineWidth(.8);doc.line(18,46,192,46);
+ if(logoData)doc.addImage(logoData,'PNG',18,11,30,30);
+ doc.setTextColor(22,22,22);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('Lehmann Gerätetechnik GmbH',53,17);
+ doc.setFont('helvetica','normal');doc.setFontSize(9);
+ doc.text('Alchisgraben 8 · 2572 Sutz-Lattrigen',53,23);
+ doc.text('Tel. 032 397 21 36 · info@lehmann-gt.ch',53,29);
+ doc.text('www.lehmann-gt.ch',53,35);
+ doc.setDrawColor(201,21,30);doc.setLineWidth(.35);doc.line(18,272,192,272);
+ doc.setFontSize(8);doc.setTextColor(90,90,90);
+ doc.text('Lehmann Gerätetechnik GmbH · Alchisgraben 8 · 2572 Sutz-Lattrigen',18,278);
+ doc.text('032 397 21 36 · info@lehmann-gt.ch · www.lehmann-gt.ch',18,283);
+ doc.setDrawColor(120,120,120);doc.setLineWidth(.2);doc.line(5,105,10,105);doc.line(5,210,10,210);
+}
+function addRecipientAddress(doc,c){
+ doc.setFont('helvetica','normal');doc.setFontSize(6.8);doc.setTextColor(90,90,90);
+ doc.text('Lehmann Gerätetechnik GmbH · Alchisgraben 8 · 2572 Sutz-Lattrigen',108,53,{maxWidth:84});
+ const lines=[];
+ if(clean(c.company))lines.push(clean(c.company));
+ const person=[clean(c.firstname),clean(c.lastname)].filter(Boolean).join(' ');
+ if(person)lines.push(person);
+ if(clean(c.street))lines.push(clean(c.street)+(clean(c.accessory)?' '+clean(c.accessory):''));
+ lines.push([clean(c.zip),clean(c.city)].filter(Boolean).join(' '));
+ doc.setFontSize(10.5);doc.setTextColor(22,22,22);doc.text(lines.filter(Boolean),108,61,{lineHeightFactor:1.35});
+}
+function addLetterToDocument(doc,c,logoData,firstDocumentPage){
+ if(!firstDocumentPage)doc.addPage('a4','portrait');
+ drawLetterBase(doc,logoData);addRecipientAddress(doc,c);
+ doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(22,22,22);
+ doc.text('Sutz-Lattrigen, '+new Intl.DateTimeFormat('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date()),192,100,{align:'right'});
+ doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(clean($('campaignName').value)||'Information',18,115,{maxWidth:174});
+ doc.setFont('helvetica','normal');doc.setFontSize(10.5);
+ let body=personalizeLetter($('letterText').value,c);
+ if(!/freundliche gr(ü|u|ue|ü)sse/i.test(body))body+=(body?'\n\n':'')+'Freundliche Grüsse\nLehmann Gerätetechnik GmbH';
+ const paragraphs=body.split(/\n/);let y=128;
+ for(const paragraph of paragraphs){
+  const lines=paragraph?doc.splitTextToSize(paragraph,174):[''];
+  for(const line of lines){
+   if(y>263){doc.addPage('a4','portrait');drawLetterBase(doc,logoData);y=58}
+   doc.text(line,18,y);y+=5.4;
+  }
+  y+=2.2;
+ }
+}
+async function createCombinedLetterPdf(){
+ const recipients=letterRecipients();
+ if(!recipients.length){alert('Keine Brief-Empfänger mit vollständiger Postadresse vorhanden.');return}
+ if(!clean($('letterText').value)){alert('Bitte zuerst einen Brieftext eingeben.');return}
+ if(recipients.length>100&&!confirm(`${recipients.length} Briefe als Gesamt-PDF erstellen?`))return;
+ const logo=await getLetterLogoData();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+ recipients.forEach((c,i)=>addLetterToDocument(doc,c,logo,i===0));
+ doc.save(safeFilename($('campaignName').value)+'_briefe.pdf');
+}
+async function createIndividualLetterZip(){
+ const recipients=letterRecipients();
+ if(!recipients.length){alert('Keine Brief-Empfänger mit vollständiger Postadresse vorhanden.');return}
+ if(!clean($('letterText').value)){alert('Bitte zuerst einen Brieftext eingeben.');return}
+ if(recipients.length>100&&!confirm(`${recipients.length} Einzelbriefe erstellen und als ZIP speichern?`))return;
+ const button=$('exportBriefZipBtn');button.disabled=true;const oldText=button.textContent;button.textContent='Einzelbriefe werden erstellt …';
+ try{
+  const logo=await getLetterLogoData();const {jsPDF}=window.jspdf;const zip=new JSZip();
+  recipients.forEach((c,i)=>{const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});addLetterToDocument(doc,c,logo,true);zip.file(String(i+1).padStart(4,'0')+'_'+safeFilename(displayName(c))+'.pdf',doc.output('arraybuffer'))});
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeFilename($('campaignName').value)+'_einzelbriefe.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }finally{button.textContent=oldText;button.disabled=false}
+}
+
 function toCsv(rows){const headers=['id','company','firstname','lastname','street','zip','city','phone_mobile','email','categories','marketing_status','assigned'];const esc=v=>'"'+clean(v).replaceAll('"','""')+'"';return'\ufeff'+headers.join(';')+'\n'+rows.map(r=>headers.map(h=>esc(h==='categories'?r.categories.join(' | '):r[h])).join(';')).join('\n')}
 function download(name,text){const b=new Blob([text],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
 $('importBtn').onclick=()=>{const f=$('fileInput').files[0];if(!f||!currentUser){$('importMsg').textContent=!f?'Bitte Excel-Datei auswählen.':'Bitte zuerst anmelden.';return}const reader=new FileReader();reader.onload=async e=>{try{$('importBtn').disabled=true;const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});if(!rows.length||!('id'in rows[0])||!('category'in rows[0]))throw new Error('Spalten id/category fehlen.');await saveImport(groupRows(rows),f.name,rows.length)}catch(err){$('importMsg').textContent='Importfehler: '+err.message}finally{$('importBtn').disabled=false}};reader.readAsArrayBuffer(f)};
 $('calculateBtn').onclick=()=>{calculate();updateDeliveryPanel();updateWhatsAppPanel()};$('saveCampaignBtn').onclick=saveCampaign;$('refreshDeliveryBtn').onclick=async()=>{if($('autoRefreshInfo'))$('autoRefreshInfo').textContent='Status wird manuell aktualisiert …';await Promise.all([refreshDeliveryStatus(false),refreshWhatsAppStatus(false)])};$('sendEmailBtn').onclick=sendEmailCampaign;$('refreshWhatsAppBtn').onclick=async()=>{await Promise.all([refreshDeliveryStatus(false),refreshWhatsAppStatus(false)])};$('sendWhatsAppBtn').onclick=sendWhatsAppCampaign;$('sendApproval').onchange=updateDeliveryPanel;$('waSendApproval').onchange=updateWhatsAppPanel;$('emailSubject').addEventListener('input',updateDeliveryPanel);$('emailText').addEventListener('input',updateDeliveryPanel);$('reloadBtn').onclick=()=>currentUser&&loadEverything();$('loginBtn').onclick=login;$('logoutBtn').onclick=logout;$('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('excludeInactive').addEventListener('change',resetCalculation);$('search').addEventListener('input',resetCalculation);document.querySelectorAll('.channelCheck,.prioritySelect').forEach(el=>el.addEventListener('change',resetCalculation));
 $('selectAllCats').onclick=()=>{document.querySelectorAll('.catCheck').forEach(x=>x.checked=true);resetCalculation()};$('clearCats').onclick=()=>{document.querySelectorAll('.catCheck').forEach(x=>x.checked=false);resetCalculation()};
-$('exportBriefBtn').onclick=()=>download((clean($('campaignName').value)||'kampagne').replace(/[^a-z0-9_-]+/gi,'_')+'_brief.csv',toCsv(lastAssignments.filter(x=>x.assigned==='letter')));$('exportSegmentBtn').onclick=()=>download((clean($('campaignName').value)||'kampagne').replace(/[^a-z0-9_-]+/gi,'_')+'_segment.csv',toCsv(lastAssignments.length?lastAssignments:getSegment().map(c=>({...c,assigned:''}))));
+$('exportBriefBtn').onclick=()=>createCombinedLetterPdf().catch(err=>alert('PDF-Fehler: '+(err?.message||String(err))));$('exportBriefZipBtn').onclick=()=>createIndividualLetterZip().catch(err=>alert('ZIP-Fehler: '+(err?.message||String(err))));$('exportSegmentBtn').onclick=()=>download((clean($('campaignName').value)||'kampagne').replace(/[^a-z0-9_-]+/gi,'_')+'_segment.csv',toCsv(lastAssignments.length?lastAssignments:getSegment().map(c=>({...c,assigned:''}))));
 $('newCampaignBtn').onclick=clearEditor;['whatsappText','emailText','smsText','letterText'].forEach(id=>$(id).addEventListener('input',()=>{updateCharCounts();updateDeliveryPanel();updateWhatsAppPanel()}));['whatsappTemplateName','whatsappTemplateLanguage','whatsappTemplateParams'].forEach(id=>$(id).addEventListener('input',updateWhatsAppPanel));$('emailSubject').addEventListener('input',updateDeliveryPanel);updateCharCounts();updateDeliveryPanel();updateWhatsAppPanel();
 (async()=>{const {data:{session}}=await db.auth.getSession();await applySession(session?.user||null)})();
 </script>
