@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="./assets/icon-192.png" />
 <link rel="manifest" href="./manifest.webmanifest" />
-<title>Lehmann Werbetool – v0.8 E-Mail + WhatsApp + SMS</title>
+<title>Lehmann Werbetool – v0.9 E-Mail + WhatsApp + SMS + Brief</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
@@ -48,7 +48,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;borde
 </style>
 </head>
 <body>
-<header><div class="brand"><div class="mark">LG</div><div><h1>Lehmann Werbetool</h1><small>v0.8 · E-Mail + WhatsApp + SMS</small></div></div><button class="ghost" id="reloadBtn">Neu aus Supabase laden</button></header>
+<header><div class="brand"><div class="mark">LG</div><div><h1>Lehmann Werbetool</h1><small>v0.9 · E-Mail + WhatsApp + SMS + Brief</small></div></div><button class="ghost" id="reloadBtn">Neu aus Supabase laden</button></header>
 <main><div class="grid">
 <section class="card span12"><div class="row" style="justify-content:space-between"><div><h2>Supabase-Anmeldung</h2><div class="muted" id="authStatus">Nicht angemeldet.</div></div><div class="row"><input id="authEmail" type="text" placeholder="E-Mail" style="width:250px"><input id="authPassword" type="password" placeholder="Passwort" style="width:180px"><button class="primary" id="loginBtn">Anmelden</button><button class="secondary" id="logoutBtn" style="display:none">Abmelden</button></div></div></section>
 
@@ -266,52 +266,57 @@ function personalizeLetter(text,c){return clean(text).replaceAll('{{vorname}}',c
 function letterRecipients(){return lastAssignments.filter(x=>x.assigned==='letter'&&postComplete(x))}
 async function getLetterLogoData(){
  if(letterLogoDataPromise)return letterLogoDataPromise;
- letterLogoDataPromise=fetch('./assets/icon-512.png').then(r=>{if(!r.ok)throw new Error('Logo konnte nicht geladen werden.');return r.blob()}).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Logo konnte nicht gelesen werden.'));reader.readAsDataURL(blob)}));
+ letterLogoDataPromise=fetch('./assets/letterhead-logo.png').then(r=>{if(!r.ok)throw new Error('Logo konnte nicht geladen werden.');return r.blob()}).then(blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Logo konnte nicht gelesen werden.'));reader.readAsDataURL(blob)}));
  return letterLogoDataPromise;
 }
 function drawLetterBase(doc,logoData){
- doc.setDrawColor(201,21,30);doc.setLineWidth(.8);doc.line(18,46,192,46);
- if(logoData)doc.addImage(logoData,'PNG',18,11,30,30);
- doc.setTextColor(22,22,22);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('Lehmann Gerätetechnik GmbH',53,17);
- doc.setFont('helvetica','normal');doc.setFontSize(9);
- doc.text('Alchisgraben 8 · 2572 Sutz-Lattrigen',53,23);
- doc.text('Tel. 032 397 21 36 · info@lehmann-gt.ch',53,29);
- doc.text('www.lehmann-gt.ch',53,35);
- doc.setDrawColor(201,21,30);doc.setLineWidth(.35);doc.line(18,272,192,272);
- doc.setFontSize(8);doc.setTextColor(90,90,90);
- doc.text('Lehmann Gerätetechnik GmbH · Alchisgraben 8 · 2572 Sutz-Lattrigen',18,278);
- doc.text('032 397 21 36 · info@lehmann-gt.ch · www.lehmann-gt.ch',18,283);
- doc.setDrawColor(120,120,120);doc.setLineWidth(.2);doc.line(5,105,10,105);doc.line(5,210,10,210);
+ if(logoData)doc.addImage(logoData,'PNG',24,9,132,35);
+ doc.setTextColor(22,22,22);doc.setFont('helvetica','normal');doc.setFontSize(10.5);
+ doc.text('Lehmann Gerätetechnik GmbH',18,61);
+ doc.text('Alchisgraben 8',18,66);
+ doc.text('2572 Sutz-Lattrigen',18,71);
+ doc.text('Tel: 032 397 21 36',18,81);
+ doc.text('Fax: 032 397 21 37',18,86);
+ doc.text('www.lehmann-gt.ch',18,91);
+ doc.setDrawColor(120,120,120);doc.setLineWidth(.2);
+ doc.line(5,105,10,105);doc.line(5,210,10,210);
 }
 function addRecipientAddress(doc,c){
- doc.setFont('helvetica','normal');doc.setFontSize(6.8);doc.setTextColor(90,90,90);
- doc.text('Lehmann Gerätetechnik GmbH · Alchisgraben 8 · 2572 Sutz-Lattrigen',108,53,{maxWidth:84});
  const lines=[];
  if(clean(c.company))lines.push(clean(c.company));
  const person=[clean(c.firstname),clean(c.lastname)].filter(Boolean).join(' ');
  if(person)lines.push(person);
  if(clean(c.street))lines.push(clean(c.street)+(clean(c.accessory)?' '+clean(c.accessory):''));
  lines.push([clean(c.zip),clean(c.city)].filter(Boolean).join(' '));
- doc.setFontSize(10.5);doc.setTextColor(22,22,22);doc.text(lines.filter(Boolean),108,61,{lineHeightFactor:1.35});
+ doc.setFont('helvetica','normal');doc.setFontSize(10.5);doc.setTextColor(22,22,22);
+ doc.text(lines.filter(Boolean),132,61,{lineHeightFactor:1.3,maxWidth:60});
+}
+function addPageNumber(doc,pageNumber,pageTotal){
+ doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(50,50,50);
+ doc.text(`Seite ${pageNumber} von ${pageTotal}`,192,286,{align:'right'});
 }
 function addLetterToDocument(doc,c,logoData,firstDocumentPage){
  if(!firstDocumentPage)doc.addPage('a4','portrait');
+ const firstPage=doc.getNumberOfPages();
  drawLetterBase(doc,logoData);addRecipientAddress(doc,c);
- doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(22,22,22);
- doc.text('Sutz-Lattrigen, '+new Intl.DateTimeFormat('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date()),192,100,{align:'right'});
- doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(clean($('campaignName').value)||'Information',18,115,{maxWidth:174});
+ doc.setFont('helvetica','normal');doc.setFontSize(10.5);doc.setTextColor(22,22,22);
+ doc.text('Sutz, '+new Intl.DateTimeFormat('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date()),132,106,{maxWidth:60});
+ doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(clean($('campaignName').value)||'Information',18,134,{maxWidth:174});
  doc.setFont('helvetica','normal');doc.setFontSize(10.5);
  let body=personalizeLetter($('letterText').value,c);
- if(!/freundliche gr(ü|u|ue|ü)sse/i.test(body))body+=(body?'\n\n':'')+'Freundliche Grüsse\nLehmann Gerätetechnik GmbH';
- const paragraphs=body.split(/\n/);let y=128;
+ if(!/freundliche gr(ü|u|ue|ü)sse/i.test(body))body+=(body?'\\n\\n':'')+'Freundliche Grüsse\\n\\nRoger Lehmann';
+ const paragraphs=body.split(/\\n/);let y=148;
  for(const paragraph of paragraphs){
   const lines=paragraph?doc.splitTextToSize(paragraph,174):[''];
   for(const line of lines){
-   if(y>263){doc.addPage('a4','portrait');drawLetterBase(doc,logoData);y=58}
+   if(y>272){doc.addPage('a4','portrait');drawLetterBase(doc,logoData);y=112}
    doc.text(line,18,y);y+=5.4;
   }
   y+=2.2;
  }
+ const lastPage=doc.getNumberOfPages(),total=lastPage-firstPage+1;
+ for(let page=firstPage;page<=lastPage;page++){doc.setPage(page);addPageNumber(doc,page-firstPage+1,total)}
+ doc.setPage(lastPage);
 }
 async function createCombinedLetterPdf(){
  const recipients=letterRecipients();
