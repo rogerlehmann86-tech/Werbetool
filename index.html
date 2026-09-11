@@ -270,7 +270,7 @@ async function getLetterLogoData(){
  return letterLogoDataPromise;
 }
 function drawLetterBase(doc,logoData){
- if(logoData)doc.addImage(logoData,'PNG',24,9,132,35);
+ if(logoData)doc.addImage(logoData,'PNG',35,9,138,35);
  doc.setTextColor(22,22,22);doc.setFont('helvetica','normal');doc.setFontSize(10.5);
  doc.text('Lehmann Gerätetechnik GmbH',18,61);
  doc.text('Alchisgraben 8',18,66);
