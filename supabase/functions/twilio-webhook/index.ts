@@ -55,25 +55,26 @@ Deno.serve(async (req) => {
     if (insertError?.code === "23505") return xmlResponse();
     if (insertError) throw insertError;
 
-    let contact: any = null;
+    let contacts: any[] = [];
     if (from) {
       const { data } = await admin.from("contacts")
         .select("id")
         .eq("phone_mobile_e164", from)
-        .limit(1)
-        .maybeSingle();
-      contact = data;
+        .limit(1000);
+      contacts = data || [];
     }
+    const contact = contacts[0] || null;
+    const contactIds = contacts.map((row: any) => row.id);
 
-    if (contact?.id && optOutType === "STOP") {
-      await admin.from("contact_channels").upsert({
-        contact_id: contact.id,
+    if (contactIds.length && optOutType === "STOP") {
+      await admin.from("contact_channels").upsert(contactIds.map((contactId: number) => ({
+        contact_id: contactId,
         channel: "sms",
         state: "blocked",
         opted_out_at: now,
         last_failure_at: now,
         failure_reason: "SMS-Abmeldung mit STOP über Twilio",
-      }, { onConflict: "contact_id,channel" });
+      })), { onConflict: "contact_id,channel" });
       await admin.from("campaign_recipients").update({
         state: "opted_out",
         failure_reason: "SMS-Abmeldung mit STOP über Twilio",
@@ -81,24 +82,37 @@ Deno.serve(async (req) => {
         provider_event_type: eventType,
         last_event_at: now,
         status_updated_at: now,
-      }).eq("contact_id", contact.id).eq("assigned_channel", "sms").eq("state", "planned");
-    } else if (contact?.id && optOutType === "START") {
-      await admin.from("contact_channels").upsert({
-        contact_id: contact.id,
+      }).in("contact_id", contactIds).eq("assigned_channel", "sms").eq("state", "planned");
+      const { data: latest } = await admin.from("campaign_recipients")
+        .select("id")
+        .eq("assigned_channel", "sms")
+        .eq("recipient_address", from)
+        .in("state", ["queued", "sent", "delivered", "failed", "opted_out"])
+        .order("sent_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest?.id) await admin.from("campaign_recipients").update({
+        opted_out_at: now,
+        opt_out_source: "Twilio STOP",
+      }).eq("id", latest.id).is("opted_out_at", null);
+    } else if (contactIds.length && optOutType === "START") {
+      await admin.from("contact_channels").upsert(contactIds.map((contactId: number) => ({
+        contact_id: contactId,
         channel: "sms",
         state: "available",
         consent_source: "Twilio START",
         consent_at: now,
         opted_out_at: null,
         failure_reason: null,
-      }, { onConflict: "contact_id,channel" });
-      await admin.from("contact_marketing").upsert({
-        contact_id: contact.id,
+      })), { onConflict: "contact_id,channel" });
+      await admin.from("contact_marketing").upsert(contactIds.map((contactId: number) => ({
+        contact_id: contactId,
         marketing_status: "consent",
         block_all: false,
         note: "SMS-Einwilligung mit START über Twilio",
         updated_at: now,
-      }, { onConflict: "contact_id" });
+      })), { onConflict: "contact_id" });
     }
 
     let recipient: any = null;
@@ -182,6 +196,10 @@ Deno.serve(async (req) => {
             last_failure_at: now,
             failure_reason: "Twilio STOP-Sperre (21610)",
           }, { onConflict: "contact_id,channel" });
+          await admin.from("campaign_recipients").update({
+            opted_out_at: now,
+            opt_out_source: "Twilio 21610",
+          }).eq("id", recipient.id).is("opted_out_at", null);
         } else {
           const invalid = ["21211", "21614"].includes(errorCode);
           const row: Record<string, unknown> = {
@@ -223,4 +241,3 @@ Deno.serve(async (req) => {
     return xmlResponse("<Response></Response>", 500);
   }
 });
-

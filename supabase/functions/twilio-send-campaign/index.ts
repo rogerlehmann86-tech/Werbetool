@@ -156,6 +156,7 @@ Deno.serve(async (req) => {
     let sent = 0;
     let failed = 0;
     let skipped = 0;
+    const rootCampaignId = clean(campaign.root_campaign_id) || campaign.id;
 
     for (const recipient of recipients as any[]) {
       const contact = contactMap.get(String(recipient.contact_id));
@@ -187,6 +188,29 @@ Deno.serve(async (req) => {
         }).eq("id", recipient.id);
         continue;
       }
+
+      // The unique claim is the final server-side guard. It protects against
+      // duplicate customer records, separate batches and concurrent invocations.
+      const { error: claimError } = await admin.from("campaign_sms_claims").insert({
+        root_campaign_id: rootCampaignId,
+        phone_e164: phone,
+        recipient_id: recipient.id,
+      });
+      if (claimError?.code === "23505") {
+        skipped++;
+        await admin.from("campaign_recipients").update({
+          state: "skipped",
+          provider: "twilio",
+          recipient_address: phone,
+          failure_reason: "Doppelte Mobilnummer – in dieser Kampagne bereits verarbeitet.",
+          failure_code: "duplicate_mobile",
+          fallback_processed_at: new Date().toISOString(),
+          fallback_note: "SMS-Dublette serverseitig unterdrückt",
+          status_updated_at: new Date().toISOString(),
+        }).eq("id", recipient.id);
+        continue;
+      }
+      if (claimError) throw new Error(claimError.message);
 
       const message = withOptOut(personalize(clean(campaign.sms_text), contact));
       const callbackUrl = new URL(WEBHOOK_URL);
@@ -267,4 +291,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
