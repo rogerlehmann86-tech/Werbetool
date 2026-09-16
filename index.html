@@ -4,9 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="theme-color" content="#c9151e" />
-<link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png" />
-<link rel="apple-touch-icon" sizes="192x192" href="./assets/icon-192.png" />
-<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png?v=promo-1" />
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=promo-1" />
+<link rel="manifest" href="./manifest.webmanifest?v=promo-1" />
 <title>Lehmann Werbetool – v0.18 Kampagnenkontrolle</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,7 +16,7 @@
 :root{--red:#c9151e;--black:#161616;--bg:#f4f5f7;--card:#fff;--line:#ddd;--muted:#666;--ok:#16833f;--warn:#a76b00}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--black)}
 header{background:#fff;border-bottom:4px solid var(--red);padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:10}
-.brand{display:flex;align-items:center;gap:14px}.mark{width:44px;height:44px;border-radius:10px;background:var(--red);color:#fff;font-weight:800;display:grid;place-items:center;font-size:20px}.brand h1{font-size:20px;margin:0}.brand small{color:var(--muted)}
+.brand{display:flex;align-items:center;gap:14px}.brand-icon{width:54px;height:54px;display:block;object-fit:contain;flex:0 0 auto}.brand h1{font-size:20px;margin:0}.brand small{color:var(--muted)}
 main{max-width:1450px;margin:24px auto;padding:0 20px 40px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
 .span12{grid-column:span 12}.span8{grid-column:span 8}.span6{grid-column:span 6}.span4{grid-column:span 4}.span3{grid-column:span 3}
 @media(max-width:950px){.span8,.span6,.span4,.span3{grid-column:span 12}header{position:static}.stats{grid-template-columns:repeat(2,1fr)!important}}
@@ -56,7 +56,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;borde
 </style>
 </head>
 <body>
-<header><div class="brand"><div class="mark">LG</div><div><h1>Lehmann Werbetool</h1><small>v0.18 · zuverlässige Kampagnenkette, Kosten & Abmeldungen</small></div></div><button class="ghost" id="reloadBtn">Neu aus Supabase laden</button></header>
+<header><div class="brand"><img class="brand-icon" src="./assets/promo-logo.png?v=promo-1" alt="LG Promo"><div><h1>Lehmann Werbetool</h1><small>v0.18 · zuverlässige Kampagnenkette, Kosten & Abmeldungen</small></div></div><button class="ghost" id="reloadBtn">Neu aus Supabase laden</button></header>
 <main><div class="grid">
 <section class="card span12"><div class="row" style="justify-content:space-between"><div><h2>Supabase-Anmeldung</h2><div class="muted" id="authStatus">Nicht angemeldet.</div></div><div class="row"><input id="authEmail" type="text" placeholder="E-Mail" style="width:250px"><input id="authPassword" type="password" placeholder="Passwort" style="width:180px"><button class="primary" id="loginBtn">Anmelden</button><button class="secondary" id="logoutBtn" style="display:none">Abmelden</button></div></div></section>
 
