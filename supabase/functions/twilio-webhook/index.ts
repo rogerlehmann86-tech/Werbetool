@@ -39,9 +39,25 @@ Deno.serve(async (req) => {
     const messageSid = clean(params.MessageSid || params.SmsSid);
     const messageStatus = clean(params.MessageStatus || params.SmsStatus).toLowerCase();
     const optOutType = clean(params.OptOutType).toUpperCase();
+    const bodyCommand = clean(params.Body)
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .replace(/[.!]+$/g, "")
+      .trim();
+    const stopByBody = /^(STOP|STOPALL|UNSUBSCRIBE|CANCEL|END|QUIT|ABMELDUNG:\s*STOP)$/.test(bodyCommand);
+    const startByBody = /^(START|UNSTOP)$/.test(bodyCommand);
+    const effectiveOptOutType = ["STOP", "START"].includes(optOutType)
+      ? optOutType
+      : stopByBody
+        ? "STOP"
+        : startByBody
+          ? "START"
+          : "";
     const from = clean(params.From);
     const recipientId = clean(requestUrl.searchParams.get("recipient_id"));
-    const eventType = optOutType ? `optout.${optOutType.toLowerCase()}` : `status.${messageStatus || "unknown"}`;
+    const eventType = effectiveOptOutType
+      ? `optout.${effectiveOptOutType.toLowerCase()}`
+      : `status.${messageStatus || "unknown"}`;
     const eventId = await sha256(publicUrl.toString() + "\n" + raw);
     const now = new Date().toISOString();
     const payload = Object.fromEntries(search.entries());
@@ -66,7 +82,7 @@ Deno.serve(async (req) => {
     const contact = contacts[0] || null;
     const contactIds = contacts.map((row: any) => row.id);
 
-    if (contactIds.length && optOutType === "STOP") {
+    if (contactIds.length && effectiveOptOutType === "STOP") {
       await admin.from("contact_channels").upsert(contactIds.map((contactId: number) => ({
         contact_id: contactId,
         channel: "sms",
@@ -96,7 +112,7 @@ Deno.serve(async (req) => {
         opted_out_at: now,
         opt_out_source: "Twilio STOP",
       }).eq("id", latest.id).is("opted_out_at", null);
-    } else if (contactIds.length && optOutType === "START") {
+    } else if (contactIds.length && effectiveOptOutType === "START") {
       await admin.from("contact_channels").upsert(contactIds.map((contactId: number) => ({
         contact_id: contactId,
         channel: "sms",
