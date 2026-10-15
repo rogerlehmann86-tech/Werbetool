@@ -15,9 +15,32 @@ Deno.serve(async (req: Request) => {
   if (!apiKey) return json({ error: "Die KI-Auswertung ist noch nicht aktiviert. Im Supabase-Projekt fehlt das Secret OPENAI_API_KEY." }, 200);
   try {
     const body = await req.json();
-    const summary = body?.summary;
-    if (!summary || typeof summary !== "object" || !Number.isFinite(summary.total)) return json({ error: "Keine gültige Adresszusammenfassung übergeben." }, 400);
-    if ((summary.cities || []).length > 150) return json({ error: "Bitte höchstens 150 Ortsgruppen übermitteln." }, 413);
+    const input = body?.summary;
+    if (!input || typeof input !== "object" || !Number.isFinite(input.total)) return json({ error: "Keine gültige Adresszusammenfassung übergeben." }, 400);
+    if (!Array.isArray(input.cities) || input.cities.length > 150) return json({ error: "Bitte höchstens 150 Ortsgruppen übermitteln." }, 413);
+    const safeNumber = (value: unknown, max = 1000000) =>
+      Number.isFinite(value) ? Math.max(0, Math.min(max, Math.round(Number(value) * 10) / 10)) : 0;
+    const rawCounts = input.counts && typeof input.counts === "object" ? input.counts : {};
+    const summary = {
+      total: safeNumber(input.total),
+      radiusKm: safeNumber(input.radiusKm, 1000),
+      counts: {
+        total: safeNumber(rawCounts.total),
+        complete: safeNumber(rawCounts.complete),
+        matched: safeNumber(rawCounts.matched),
+        inside: safeNumber(rawCounts.inside),
+        outside: safeNumber(rawCounts.outside),
+        notFound: safeNumber(rawCounts.notFound),
+        incomplete: safeNumber(rawCounts.incomplete)
+      },
+      cities: input.cities.map((city: any) => ({
+        place: String(city?.place || "").trim().slice(0, 80),
+        count: safeNumber(city?.count),
+        inside: safeNumber(city?.inside),
+        outside: safeNumber(city?.outside),
+        averageDistanceKm: safeNumber(city?.averageDistanceKm, 2500)
+      }))
+    };
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
