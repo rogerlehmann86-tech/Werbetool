@@ -290,7 +290,7 @@ async function checkSelectedAddresses(){
 function addressAnalysisSummary(rows=selectedBaseRows()){
  const radius=Number($('geoRadius').value)||40,counts={total:rows.length,complete:0,matched:0,inside:0,outside:0,notFound:0,incomplete:0},places=new Map();
  for(const c of rows){const city=clean(c.city)||'Unbekannter Ort',d=geoDistanceFor(c);if(!addressCompleteForGeo(c)){counts.incomplete++;continue}counts.complete++;if(c.geo_status==='not_found'&&c.geo_address_key===geoAddressKey(c))counts.notFound++;if(d===null)continue;counts.matched++;const inside=d<=radius;if(inside)counts.inside++;else counts.outside++;const p=places.get(city)||{place:city,count:0,inside:0,outside:0,distanceTotal:0};p.count++;if(inside)p.inside++;else p.outside++;p.distanceTotal+=d;places.set(city,p)}
- return{total:counts.total,radiusKm:radius,origin:clean($('geoOrigin').value),counts,cities:[...places.values()].map(p=>({place:p.place,count:p.count,inside:p.inside,outside:p.outside,averageDistanceKm:Math.round(p.distanceTotal/p.count)})).sort((a,b)=>b.count-a.count).slice(0,150)}
+ return{total:counts.total,radiusKm:radius,counts,cities:[...places.values()].map(p=>({place:p.place,count:p.count,inside:p.inside,outside:p.outside,averageDistanceKm:Math.round(p.distanceTotal/p.count)})).sort((a,b)=>b.count-a.count).slice(0,150)}
 }
 async function runAddressAiAnalysis(){
  const stats=updateGeoQualitySummary();if(stats.unknown){alert('Bitte zuerst die Adressen der Auswahl prüfen.');return}
