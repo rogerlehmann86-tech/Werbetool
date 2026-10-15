@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png?v=promo-1" />
 <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=promo-1" />
 <link rel="manifest" href="./manifest.webmanifest?v=promo-1" />
-<title>Lehmann Werbetool – v0.24 Adressauswahl nach Radius</title>
+<title>Lehmann Werbetool – v0.25 Adressauswahl nach Radius</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
@@ -269,7 +269,7 @@ function geoDistanceFor(c){const key=geoAddressKey(c);if(geoOriginPoint?.key!==g
 function geoStatusLine(c){const d=geoDistanceFor(c);if(d!==null)return d.toFixed(1)+' km ab Ausgangspunkt';if(c.geo_status==='not_found'&&c.geo_address_key===geoAddressKey(c))return'Bei swisstopo nicht gefunden';if(c.geo_status==='incomplete')return'Adresse unvollständig';return'Noch nicht geprüft'}
 function filteredCustomers(ignoreGeo=false){const mode=selectionMode(),cats=mode==='segment'?selectedCategories():[],excluded=mode==='segment'?excludedCategories():[],ex=$('excludeInactive').checked,q=$('search').value.trim().toLowerCase(),terms=q.split(/\s+/).filter(Boolean),rows=customers.filter(c=>{if(ex&&c.inactive)return false;const matchesCategory=(cat)=>cat===NO_CATEGORY?!c.categories.length:c.categories.includes(cat);if(cats.length&&!cats.some(matchesCategory))return false;if(excluded.some(matchesCategory))return false;return customerSearchMatches(c,terms)});return ignoreGeo?rows:applyGeoFilter(rows)}
 function selectedBaseRows(){if(selectionMode()==='manual'){const ex=$('excludeInactive').checked;return customers.filter(c=>manualSelected.has(c.id)&&!(ex&&c.inactive))}return filteredCustomers(true)}
-function applyGeoFilter(rows){if(!$('geoOnlyWithin')?.checked)return rows;const radius=Number($('geoRadius')?.value)||40;return rows.filter(c=>{if(geoIncludedContactIds.has(String(c.id)))return true;const d=geoDistanceFor(c);return d!==null&&d<=radius})}
+function applyGeoFilter(rows){if(!$('geoOnlyWithin')?.checked)return rows;const radius=Number($('geoRadius')?.value)||40;return rows.filter(c=>{if(manualExcluded.has(String(c.id)))return true;if(geoIncludedContactIds.has(String(c.id)))return true;const d=geoDistanceFor(c);return d!==null&&d<=radius})}
 function getSegment(){return applyGeoFilter(selectedBaseRows())}
 function displayGeoAddress(c){return[clean(c.street),clean(c.zip)+' '+clean(c.city)].filter(Boolean).join(', ')}
 function geoOriginKey(){return clean($('geoOrigin')?.value).toLocaleLowerCase('de-CH')}
