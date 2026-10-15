@@ -352,7 +352,25 @@ async function runAddressAiAnalysis(){
  const stats=updateGeoQualitySummary();if(stats.pending>0){alert('Bitte zuerst noch offene oder geänderte Adressen prüfen. Bereits geprüfte, nicht gefundene und unvollständige Adressen können in die KI-Auswertung einfliessen.');return}
  const button=$('analyzeAddressesBtn'),result=$('aiAnalysisResult');button.disabled=true;result.hidden=false;result.textContent='KI-Auswertung läuft …';
  try{
-  const {data,error}=await db.functions.invoke('address-ai-review',{body:{summary:addressAnalysisSummary()}});if(error)throw new Error(error.message||'KI-Auswertung fehlgeschlagen.');if(data?.error)throw new Error(data.error);
+  const {data,error}=await db.functions.invoke('address-ai-review',{body:{summary:addressAnalysisSummary()}});
+  if(error){
+   let message=error.message||'KI-Auswertung fehlgeschlagen.';
+   try{
+    const response=error.context;
+    if(response&&typeof response.clone==='function'){
+     const raw=await response.clone().text();let payload=null;
+     try{payload=JSON.parse(raw)}catch{}
+     const serverError=typeof payload?.error==='string'?payload.error:payload?.error?.message;
+     const detail=typeof payload?.detail==='string'?payload.detail:typeof payload?.details==='string'?payload.details:'';
+     if(serverError)message=serverError+(detail?' '+detail:'');
+     else if(raw.trim())message=raw.trim().slice(0,1000);
+     const status=error.status||response.status;
+     if(status&&!serverError)message+=' (HTTP '+status+')';
+    }
+   }catch{}
+   throw new Error(message.slice(0,1200));
+  }
+  if(data?.error)throw new Error(data.error);
   const a=data.analysis||{};renderAddressAiAnalysis(a);geoCampaignAnalysis=buildGeoCampaignAnalysis(selectedBaseRows(),geoCampaignAnalysis);geoCampaignAnalysis.ai_analysis=a;geoCampaignAnalysis.ai_analyzed_at=new Date().toISOString();
   if(currentCampaignId){const {error:saveError}=await db.from('campaigns').update({geo_analysis:geoCampaignAnalysis}).eq('id',currentCampaignId);if(saveError)throw saveError;const current=campaigns.find(x=>x.id===currentCampaignId);if(current)current.geo_analysis=geoCampaignAnalysis}
   $('geoProgress').textContent='KI-Auswertung gespeichert'+(currentCampaignId?' für diese Kampagne':' – wird beim Speichern der Kampagne übernommen')+'.';
