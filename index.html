@@ -349,7 +349,7 @@ function addressAnalysisSummary(rows=selectedBaseRows()){
  return{total:counts.total,radiusKm:radius,counts,cities:[...places.values()].map(p=>({place:p.place,count:p.count,inside:p.inside,outside:p.outside,averageDistanceKm:Math.round(p.distanceTotal/p.count)})).sort((a,b)=>b.count-a.count).slice(0,150)}
 }
 async function runAddressAiAnalysis(){
- const stats=updateGeoQualitySummary();if(stats.unknown){alert('Bitte zuerst die Adressen der Auswahl prüfen.');return}
+ const stats=updateGeoQualitySummary();if(stats.pending>0){alert('Bitte zuerst noch offene oder geänderte Adressen prüfen. Bereits geprüfte, nicht gefundene und unvollständige Adressen können in die KI-Auswertung einfliessen.');return}
  const button=$('analyzeAddressesBtn'),result=$('aiAnalysisResult');button.disabled=true;result.hidden=false;result.textContent='KI-Auswertung läuft …';
  try{
   const {data,error}=await db.functions.invoke('address-ai-review',{body:{summary:addressAnalysisSummary()}});if(error)throw new Error(error.message||'KI-Auswertung fehlgeschlagen.');if(data?.error)throw new Error(data.error);
