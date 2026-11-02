@@ -325,31 +325,70 @@ async function winterLinkReview(){
  await winterConfirmationRefresh();
  const recipientRows=await fetchAllPages(()=>db.from('campaign_recipients').select('contact_id,assigned_channel,state').eq('campaign_id',campaignId));
  const recipients=new Map(recipientRows.map(x=>[String(x.contact_id),x]));
- const stored=new Map(winterConfirmationRows.map(x=>[x.report_id,x]));
- const rows=[];
+ const customerById=new Map(customers.map(c=>[String(c.id),c]));
+ const usedNumbers={sms:new Set(),whatsapp:new Set()};
+ for(const recipient of recipientRows){
+  if(recipient.assigned_channel!=='sms'&&recipient.assigned_channel!=='whatsapp')continue;
+  const contact=customerById.get(String(recipient.contact_id));
+  if(contact){
+   const phone=normPhone(contact.phone_mobile_norm||contact.phone_mobile);
+   if(phone)usedNumbers[recipient.assigned_channel].add(phone);
+  }
+ }
+ const locked=target.state!=='draft'
+  ||!!target.resend_broadcast_id
+  ||['sms_send_status','email_send_status','whatsapp_send_status'].some(field=>['queued','sending','sent','completed'].includes(String(target[field]||'').toLowerCase()))
+  ||recipientRows.some(r=>['queued','sent','delivered','read','failed','opted_out'].includes(r.state));
+ const proposals=new Map(),stored=new Map(winterConfirmationRows.map(x=>[x.report_id,x])),rows=[];
  for(const report of winterReports){
   const existing=stored.get(report.id);
   if(existing?.campaign_id)continue;
-  let contact=existing?.contact_id?customers.find(c=>String(c.id)===String(existing.contact_id)):null;
+  let contact=existing?.contact_id?customerById.get(String(existing.contact_id)):null;
   let suggested=false;
   if(!contact&&!existing?.contact_id){
    const found=customers.filter(c=>winterCustomerNames(c).some(n=>winterNorm(n)===report.name)&&winterNorm(c.street)===report.street&&winterNorm(c.zip)===report.zip);
    if(found.length===1){contact=found[0];suggested=true}
   }
   const recipient=contact?recipients.get(String(contact.id)):null;
-  let reason='';
+  let reason='',proposedChannel=null;
   if(existing?.contact_id&&!contact)reason='Kontakt-ID nicht mehr im Kundenstamm vorhanden';
   else if(!contact)reason='Keine eindeutige Kontaktzuordnung – unter «Unklare Rapporte prüfen» zuordnen';
-  else if(!recipient)reason='Kontakt ist noch kein Empfänger dieser Kampagne';
-  else if(!recipient.assigned_channel)reason='Empfänger hat keinen Versandkanal / ist ausgeschlossen';
-  else if(recipient.state!=='planned')reason='Empfängerstatus '+recipient.state+' – nicht nachträglich als unversendet zuordnen';
-  else if(existing?.delivery_status&&!['pending','failed'].includes(existing.delivery_status))reason='Rapportstatus '+existing.delivery_status+' benötigt Prüfung';
-  const eligible=!!(contact&&recipient?.assigned_channel&&recipient.state==='planned'&&!reason);
-  rows.push({report,contact,recipient,eligible,suggested,reason});
+  else if(existing?.delivery_status&&!['pending','failed'].includes(existing.delivery_status))reason='Rapportstatus '+existing.delivery_status+' benötigt eine Prüfung';
+  else if(locked)reason='Die Kampagne wurde bereits gestartet oder ist nicht mehr im Entwurf';
+  else if(recipient&&!recipient.assigned_channel)reason='Empfänger hat keinen Versandkanal / ist ausgeschlossen';
+  else if(recipient&&recipient.state!=='planned')reason='Empfängerstatus '+recipient.state+' – bitte gesondert prüfen';
+  else if(!recipient){
+   const contactId=String(contact.id);
+   if(!proposals.has(contactId)){
+    let channel=null,blockedReason='';
+    if(target.exclude_inactive&&contact.inactive)blockedReason='Inaktiver Kontakt wird von dieser Kampagne ausgeschlossen';
+    else if(contact.block_all||contact.marketing_status==='blocked')blockedReason='Werbesperre für diesen Kunden';
+    else{
+     for(const ch of target.channel_priority||[]){
+      if(!can(contact,ch))continue;
+      if(ch==='sms'||ch==='whatsapp'){
+       const phone=normPhone(contact.phone_mobile_norm||contact.phone_mobile);
+       if(!isSwissMobile(phone)||usedNumbers[ch].has(phone))continue;
+       channel=ch;usedNumbers[ch].add(phone);break;
+      }
+      channel=ch;break;
+     }
+     if(!channel)blockedReason='Kein zulässiger Versandkanal / mögliche doppelte Mobilnummer';
+    }
+    proposals.set(contactId,{channel,reason:blockedReason});
+   }
+   const proposal=proposals.get(contactId);proposedChannel=proposal.channel;reason=proposal.reason;
+  }
+  const eligible=!!(contact&&(recipient?.assigned_channel||proposedChannel)&&!reason);
+  rows.push({report,contact,recipient,proposedChannel,eligible,suggested,reason});
  }
  winterLinkReviewState={campaignId,season,rows};
  const ready=rows.filter(x=>x.eligible),missing=rows.filter(x=>!x.eligible);
- $('winterLinkReviewSummary').textContent=rows.length+' Rapporte ohne Kampagnenzuordnung · '+ready.length+' direkt übernehmbar · '+missing.length+' benötigen eine Prüfung. '+(ready.length?'Übernehmbare Rapporte verwenden bereits geplante Empfänger; es wird kein zusätzlicher Versand ausgelöst.':'');
+ const newContacts=new Map(ready.filter(x=>!x.recipient).map(x=>[String(x.contact.id),x.proposedChannel]));
+ const newCounts={sms:0,letter:0,email:0,whatsapp:0};
+ for(const channel of newContacts.values())if(channel in newCounts)newCounts[channel]++;
+ const newSummary=Object.entries(newCounts).filter(([,n])=>n).map(([ch,n])=>n+' '+({sms:'SMS',letter:'Brief',email:'E-Mail',whatsapp:'WhatsApp'}[ch])).join(', ');
+ $('winterLinkReviewSummary').textContent=rows.length+' Rapporte ohne Kampagnenzuordnung · '+ready.length+' übernehmbar · '+newContacts.size+' zusätzliche Empfänger'+(newSummary?' ('+newSummary+')':'')+' · '+missing.length+' benötigen eine Prüfung. Es wird nichts versendet.';
  const el=$('winterLinkReviewTable');el.replaceChildren();el.style.display=rows.length?'block':'none';
  if(rows.length){
   const table=document.createElement('table'),head=document.createElement('thead'),hr=document.createElement('tr');
@@ -357,19 +396,23 @@ async function winterLinkReview(){
   head.appendChild(hr);table.appendChild(head);
   const tbody=document.createElement('tbody');
   for(const item of rows){
-   const tr=document.createElement('tr'),values=[
+   const tr=document.createElement('tr');
+   const channel=item.recipient?.assigned_channel||item.proposedChannel;
+   const values=[
     item.report.id,item.report.rawName,
     item.contact?[String(item.contact.id),winterCustomerNames(item.contact)[0]].join(' / '):'Noch keine Zuordnung',
-    item.recipient?.assigned_channel||'—',
-    item.eligible?(item.suggested?'Eindeutiger Adressabgleich; Zuordnung wird beim Übernehmen gespeichert':'Bereit zur Übernahme'):item.reason
+    channel?({sms:'SMS',letter:'Brief',email:'E-Mail',whatsapp:'WhatsApp'}[channel]||channel):'—',
+    item.eligible?
+     (item.recipient?'Bereits in der Kampagne – Rapport verknüpfen':'Neuen Empfänger zur Kampagne hinzufügen'+(item.contact.inactive?' (Kontakt inaktiv)':'')):
+     item.reason
    ];
    values.forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td)});
-   tbody.appendChild(tr)
+   tbody.appendChild(tr);
   }
   table.appendChild(tbody);el.appendChild(table);
  }
  $('winterLinkApplyBtn').disabled=!ready.length;
- $('winterLinkApplyBtn').textContent=ready.length+' Rapporte zuordnen';
+ $('winterLinkApplyBtn').textContent=ready.length+' Rapporte / '+newContacts.size+' neue Empfänger übernehmen';
  return winterLinkReviewState;
 }
 $('winterLinkCampaign').addEventListener('change',winterLinkResetReview);
@@ -379,33 +422,56 @@ $('winterLinkApplyBtn').onclick=async()=>{
  if(!state||state.campaignId!==$('winterLinkCampaign').value||state.season!==$('winterSeason').value){alert('Bitte die Zuordnungen erneut prüfen.');return}
  const ready=state.rows.filter(x=>x.eligible);
  if(!ready.length)return;
+ const newContacts=new Map(ready.filter(x=>!x.recipient).map(x=>[String(x.contact.id),x.proposedChannel]));
+ const newCounts={sms:0,letter:0,email:0,whatsapp:0};
+ for(const channel of newContacts.values())if(channel in newCounts)newCounts[channel]++;
+ const channelSummary=Object.entries(newCounts).filter(([,n])=>n).map(([ch,n])=>n+' '+({sms:'SMS',letter:'Brief',email:'E-Mail',whatsapp:'WhatsApp'}[ch])).join(', ');
  const suggested=ready.filter(x=>x.suggested);
- if(!confirm(ready.length+' Winterservice-Rapporte mit der Kampagne «'+(campaigns.find(c=>c.id===state.campaignId)?.name||state.campaignId)+'» verknüpfen?'+(suggested.length?'\n\n'+suggested.length+' eindeutige Kontaktzuordnung(en) werden dabei zusätzlich gespeichert.':'')+'\n\nEs werden keine zusätzlichen SMS, E-Mails oder Briefe versendet.'))return;
+ if(!confirm(
+  ready.length+' Rapporte mit der Kampagne «'+(campaigns.find(c=>c.id===state.campaignId)?.name||state.campaignId)+'» verknüpfen?\n\n'
+  +newContacts.size+' neue Empfänger zur bestehenden Kampagne hinzufügen'+(channelSummary?' ('+channelSummary+')':'')+'.'
+  +(suggested.length?'\n'+suggested.length+' eindeutige Kontaktzuordnung(en) werden zusätzlich gespeichert.':'')
+  +'\n\nDie bestehenden Empfänger bleiben erhalten. Es wird KEIN Versand gestartet.'
+ ))return;
  button.disabled=true;
  try{
   await winterConfirmationRefresh();
   const recent=new Map(winterConfirmationRows.map(x=>[x.report_id,x]));
   for(const item of ready){
    const latest=recent.get(item.report.id);
-   if(latest?.campaign_id||(latest?.contact_id&&String(latest.contact_id)!==String(item.contact.id)))throw Error('Rapport '+item.report.id+' wurde inzwischen anderweitig zugeordnet. Bitte die Prüfung wiederholen.');
+   if(latest?.campaign_id||(latest?.contact_id&&String(latest.contact_id)!==String(item.contact.id)))
+    throw Error('Rapport '+item.report.id+' wurde inzwischen anderweitig zugeordnet. Bitte die Prüfung wiederholen.');
   }
   for(const item of suggested){
    const latest=recent.get(item.report.id);
    if(latest?.contact_id)continue;
    if(latest){
-    const {error}=await db.from('winterservice_confirmations').update({contact_id:Number(item.contact.id),customer_label:item.report.rawName,updated_at:new Date().toISOString()}).eq('season',state.season).eq('report_id',item.report.id).is('contact_id',null).is('campaign_id',null);
-    if(error)throw Error('Kontaktzuordnung für Rapport '+item.report.id+': '+error.message);
+    const {data,error}=await db.from('winterservice_confirmations')
+     .update({contact_id:Number(item.contact.id),customer_label:item.report.rawName,updated_at:new Date().toISOString()})
+     .eq('season',state.season).eq('report_id',item.report.id).is('contact_id',null).is('campaign_id',null)
+     .select('report_id');
+    if(error||!data?.length)throw Error('Kontaktzuordnung für Rapport '+item.report.id+': '+(error?.message||'inzwischen verändert'));
    }else{
     const {error}=await db.from('winterservice_confirmations').insert({season:state.season,report_id:item.report.id,contact_id:Number(item.contact.id),customer_label:item.report.rawName,delivery_status:'pending'});
     if(error)throw Error('Kontaktzuordnung für Rapport '+item.report.id+': '+error.message);
    }
   }
   const ids=ready.map(x=>x.report.id);
-  const {data,error}=await db.rpc('winterservice_link_existing_recipients',{p_campaign_id:state.campaignId,p_season:state.season,p_report_ids:ids});
+  const {data,error}=await db.rpc('winterservice_add_campaign_recipients',{p_campaign_id:state.campaignId,p_season:state.season,p_report_ids:ids});
   if(error)throw error;
+  const added=Number(data?.recipients_added||0),linked=Number(data?.reports_linked||0);
+  await loadCampaigns();
+  if(currentCampaignId===state.campaignId){
+   const updated=await fetchAllPages(()=>db.from('campaign_recipients').select('contact_id,assigned_channel,state,failure_reason').eq('campaign_id',state.campaignId).order('contact_id').order('id'));
+   const camp=campaigns.find(c=>c.id===state.campaignId);
+   manualSelected=new Set((camp?.manual_contact_ids||[]).map(String));
+   loadStoredAssignments(updated);
+   await Promise.all([refreshDeliveryStatus(false),refreshWhatsAppStatus(false),refreshSmsStatus()]);
+   updateCampaignLaunchPanel();
+  }
   await winterLinkReview();
-  alert((Number(data)||0)+' Rapport(e) wurden der Kampagne zugeordnet. Rapporte ohne passenden, noch nicht versendeten Kampagnenempfänger bleiben zur Prüfung sichtbar.');
- }catch(e){alert('Zuordnung fehlgeschlagen: '+e.message);winterLinkResetReview()}
+  alert(linked+' Rapporte und '+added+' neue Empfänger erfolgreich in der Kampagne gespeichert. Es wurde nichts versendet. Bitte die aktualisierte Versandverteilung kontrollieren.');
+ }catch(e){alert('Übernahme fehlgeschlagen: '+e.message);winterLinkResetReview()}
  finally{button.disabled=!winterLinkReviewState?.rows?.some(x=>x.eligible)}
 };
 
