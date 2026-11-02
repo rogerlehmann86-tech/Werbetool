@@ -353,7 +353,7 @@ async function winterLinkReview(){
   let reason='',proposedChannel=null;
   if(existing?.contact_id&&!contact)reason='Kontakt-ID nicht mehr im Kundenstamm vorhanden';
   else if(!contact)reason='Keine eindeutige Kontaktzuordnung – unter «Unklare Rapporte prüfen» zuordnen';
-  else if(existing?.delivery_status&&!['pending','failed'].includes(existing.delivery_status))reason='Rapportstatus '+existing.delivery_status+' benötigt eine Prüfung';
+  else if(existing?.delivery_status&&existing.delivery_status!=='pending')reason='Rapportstatus '+existing.delivery_status+' benötigt eine Prüfung';
   else if(locked)reason='Die Kampagne wurde bereits gestartet oder ist nicht mehr im Entwurf';
   else if(recipient&&!recipient.assigned_channel)reason='Empfänger hat keinen Versandkanal / ist ausgeschlossen';
   else if(recipient&&recipient.state!=='planned')reason='Empfängerstatus '+recipient.state+' – bitte gesondert prüfen';
